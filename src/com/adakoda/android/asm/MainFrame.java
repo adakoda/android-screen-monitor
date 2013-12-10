@@ -1,3 +1,18 @@
+/*
+ * Copyright (C) 2009-2011 adakoda
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.adakoda.android.asm;
 
 import java.awt.Color;
@@ -24,6 +39,7 @@ import javax.imageio.ImageIO;
 import javax.swing.AbstractAction;
 import javax.swing.ButtonGroup;
 import javax.swing.InputMap;
+import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -46,6 +62,8 @@ import com.android.ddmlib.RawImage;
 public class MainFrame extends JFrame {
 	private static final int DEFAULT_WIDTH = 320;
 	private static final int DEFAULT_HEIGHT = 480;
+	
+	private static final String EXT_PNG = "png";
 
 	private MainPanel mPanel;
 	private JPopupMenu mPopupMenu;
@@ -54,6 +72,8 @@ public class MainFrame extends JFrame {
 	private int mRawImageHeight = DEFAULT_HEIGHT;
 	private boolean mPortrait = true;
 	private double mZoom = 1.0;
+	private boolean mAdjustColor = false;
+	private JCheckBoxMenuItem mAdjustColorCheckBoxMenuItem;
 
 	private ADB mADB;
 	private IDevice[] mDevices;
@@ -127,19 +147,23 @@ public class MainFrame extends JFrame {
 				fileChooser.setFileFilter(new FileFilter() {
 					@Override
 					public String getDescription() {
-						return "*.png";
+						return "*." + EXT_PNG;
 					}
 
 					@Override
 					public boolean accept(File f) {
 						String ext = f.getName().toLowerCase();
-						return (ext.endsWith(".png"));
+						return (ext.endsWith("." + EXT_PNG));
 					}
 				});
 				if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
 					try {
-						ImageIO.write(outImage, "png", fileChooser
-								.getSelectedFile());
+						File file = fileChooser.getSelectedFile();
+						String path = file.getAbsolutePath();
+						if (!path.endsWith("." + EXT_PNG)) {
+							file = new File(path + "." + EXT_PNG);
+						}
+						ImageIO.write(outImage, EXT_PNG, file);
 					} catch (Exception ex) {
 						JOptionPane.showMessageDialog(this,
 								"Failed to save a image.", "Save Image",
@@ -220,6 +244,7 @@ public class MainFrame extends JFrame {
 		mPopupMenu.addSeparator();
 		initializeOrientationMenu();
 		initializeZoomMenu();
+		initializeAdjustColor();
 		mPopupMenu.addSeparator();
 		initializeSaveImageMenu();
 		mPopupMenu.addSeparator();
@@ -350,6 +375,18 @@ public class MainFrame extends JFrame {
 		menuZoom.add(radioButtonMenuItemZoom200);
 	}
 
+	private void initializeAdjustColor() {
+		mAdjustColorCheckBoxMenuItem = new JCheckBoxMenuItem("Adjust Color");
+		mAdjustColorCheckBoxMenuItem.setMnemonic(KeyEvent.VK_J);
+		mAdjustColorCheckBoxMenuItem.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				mAdjustColor = !mAdjustColor;
+				mAdjustColorCheckBoxMenuItem.setSelected(mAdjustColor);
+			}
+		});
+		mPopupMenu.add(mAdjustColorCheckBoxMenuItem);
+	}
+	
 	private void initializeSaveImageMenu() {
 		JMenuItem menuItemSaveImage = new JMenuItem("Save Image...");
 		menuItemSaveImage.setMnemonic(KeyEvent.VK_S);
@@ -402,6 +439,12 @@ public class MainFrame extends JFrame {
 				setZoom(2.0);
 			}
 		};
+		AbstractAction actionAdjustColor = new AbstractAction() {
+			public void actionPerformed(ActionEvent e) {
+				mAdjustColor = !mAdjustColor;
+				mAdjustColorCheckBoxMenuItem.setSelected(mAdjustColor);
+			}
+		};
 		AbstractAction actionSaveImage = new AbstractAction() {
 			public void actionPerformed(ActionEvent e) {
 				saveImage();
@@ -432,6 +475,8 @@ public class MainFrame extends JFrame {
 				InputEvent.CTRL_DOWN_MASK), "150%");
 		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_2,
 				InputEvent.CTRL_DOWN_MASK), "200%");
+		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_J,
+				InputEvent.CTRL_DOWN_MASK), "Adjust Color");
 		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_S,
 				InputEvent.CTRL_DOWN_MASK), "Save Image");
 		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_A,
@@ -449,6 +494,7 @@ public class MainFrame extends JFrame {
 		targetComponent.getActionMap().put("100%", actionZoom100);
 		targetComponent.getActionMap().put("150%", actionZoom150);
 		targetComponent.getActionMap().put("200%", actionZoom200);
+		targetComponent.getActionMap().put("Adjust Color", actionAdjustColor);
 		targetComponent.getActionMap().put("Save Image", actionSaveImage);
 		targetComponent.getActionMap().put("About ASM", actionAbout);
 	}
@@ -580,7 +626,7 @@ public class MainFrame extends JFrame {
 
 		private FBImage getDeviceImage() throws IOException {
 			boolean success = true;
-			boolean debug = false; // リリース時はfalseとすること
+			boolean debug = false;
 			FBImage fbImage = null;
 			RawImage tmpRawImage = null;
 			RawImage rawImage = null;
@@ -595,7 +641,6 @@ public class MainFrame extends JFrame {
 						if (debug == false) {
 							rawImage = tmpRawImage;
 						} else {
-							// デバッグ用に16bppで取得したRAWImageを32bppに書き換える
 							rawImage = new RawImage();
 							rawImage.version = 1;
 							rawImage.bpp = 32;
@@ -627,6 +672,11 @@ public class MainFrame extends JFrame {
 									rawImage.data[dst++] = (byte) g;
 									rawImage.data[dst++] = (byte) b;
 									rawImage.data[dst++] = (byte) 0xFF;
+//									// big endian
+//									rawImage.data[dst++] = (byte) 0xFF;
+//									rawImage.data[dst++] = (byte) b;
+//									rawImage.data[dst++] = (byte) g;
+//									rawImage.data[dst++] = (byte) r;
 								}
 							}
 						}
@@ -672,28 +722,42 @@ public class MainFrame extends JFrame {
 
 				int index = 0;
 
+				final int offset0;
+				final int offset1;
+				final int offset2;
+				final int offset3;
+				
 				if (rawImage.bpp == 16) {
+					if (!mAdjustColor) {
+						offset0 = 0;
+						offset1 = 1;
+					} else {
+						offset0 = 1;
+						offset1 = 0;
+					}
 					if (mPortrait) {
 						for (int y = 0; y < rawImage.height; y++) {
 							for (int x = 0; x < rawImage.width; x++) {
-								int value = buffer[index++] & 0x00FF;
-								value |= (buffer[index++] << 8) & 0xFF00;
+								int value = buffer[index + offset0] & 0x00FF;
+								value |= (buffer[index + offset1] << 8) & 0xFF00;
 								int r = ((value >>> redOffset) & redMask) << redShift;
 								int g = ((value >>> greenOffset) & greenMask) << greenShift;
 								int b = ((value >>> blueOffset) & blueMask) << blueShift;
 								value = 255 << 24 | r << 16 | g << 8 | b;
+								index += 2;
 								fbImage.setRGB(x, y, value);
 							}
 						}
 					} else {
 						for (int y = 0; y < rawImage.height; y++) {
 							for (int x = 0; x < rawImage.width; x++) {
-								int value = buffer[index++] & 0x00FF;
-								value |= (buffer[index++] << 8) & 0xFF00;
+								int value = buffer[index + offset0] & 0x00FF;
+								value |= (buffer[index + offset1] << 8) & 0xFF00;
 								int r = ((value >>> redOffset) & redMask) << redShift;
 								int g = ((value >>> greenOffset) & greenMask) << greenShift;
 								int b = ((value >>> blueOffset) & blueMask) << blueShift;
 								value = 255 << 24 | r << 16 | g << 8 | b;
+								index += 2;
 								fbImage
 										.setRGB(y, rawImage.width - x - 1,
 												value);
@@ -701,14 +765,25 @@ public class MainFrame extends JFrame {
 						}
 					}
 				} else if (rawImage.bpp == 32) {
+					if (!mAdjustColor) {
+						offset0 = 0;
+						offset1 = 1;
+						offset2 = 2;
+						offset3 = 3;					
+					} else {
+						offset0 = 3;
+						offset1 = 2;
+						offset2 = 1;
+						offset3 = 0;
+					}
 					if (mPortrait) {
 						for (int y = 0; y < rawImage.height; y++) {
 							for (int x = 0; x < rawImage.width; x++) {
 								int value;
-								value = buffer[index] & 0x00FF;
-								value |= (buffer[index + 1] & 0x00FF) << 8;
-								value |= (buffer[index + 2] & 0x00FF) << 16;
-								value |= (buffer[index + 3] & 0x00FF) << 24;
+								value = buffer[index + offset0] & 0x00FF;
+								value |= (buffer[index + offset1] & 0x00FF) << 8;
+								value |= (buffer[index + offset2] & 0x00FF) << 16;
+								value |= (buffer[index + offset3] & 0x00FF) << 24;
 								final int r = ((value >>> redOffset) & redMask) << redShift;
 								final int g = ((value >>> greenOffset) & greenMask) << greenShift;
 								final int b = ((value >>> blueOffset) & blueMask) << blueShift;
@@ -727,10 +802,10 @@ public class MainFrame extends JFrame {
 						for (int y = 0; y < rawImage.height; y++) {
 							for (int x = 0; x < rawImage.width; x++) {
 								int value;
-								value = buffer[index] & 0x00FF;
-								value |= (buffer[index + 1] & 0x00FF) << 8;
-								value |= (buffer[index + 2] & 0x00FF) << 16;
-								value |= (buffer[index + 3] & 0x00FF) << 24;
+								value = buffer[index + offset0] & 0x00FF;
+								value |= (buffer[index + offset1] & 0x00FF) << 8;
+								value |= (buffer[index + offset2] & 0x00FF) << 16;
+								value |= (buffer[index + offset3] & 0x00FF) << 24;
 								final int r = ((value >>> redOffset) & redMask) << redShift;
 								final int g = ((value >>> greenOffset) & greenMask) << greenShift;
 								final int b = ((value >>> blueOffset) & blueMask) << blueShift;
