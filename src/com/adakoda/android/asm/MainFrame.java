@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 adakoda
+ * Copyright (C) 2009-2013 adakoda
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,12 +34,12 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.prefs.Preferences;
 
 import javax.imageio.ImageIO;
 import javax.swing.AbstractAction;
 import javax.swing.ButtonGroup;
 import javax.swing.InputMap;
-import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -64,16 +64,26 @@ public class MainFrame extends JFrame {
 	private static final int DEFAULT_HEIGHT = 480;
 	
 	private static final String EXT_PNG = "png";
+	
+	private static final int FB_TYPE_XBGR = 0;
+	private static final int FB_TYPE_RGBX = 1;
+	private static final int FB_TYPE_XRGB = 2;
 
+	private static int[][] FB_OFFSET_LIST = {
+			{0, 1, 2, 3}, // XBGR : Normal
+			{3, 2, 1, 0}, // RGBX : Xperia Arc
+			{2, 1, 0, 3}  // XRGB : FireFox OS(B2G)
+	};
+	
 	private MainPanel mPanel;
 	private JPopupMenu mPopupMenu;
 
+	private Preferences mPrefs;
 	private int mRawImageWidth = DEFAULT_WIDTH;
 	private int mRawImageHeight = DEFAULT_HEIGHT;
 	private boolean mPortrait = true;
 	private double mZoom = 1.0;
-	private boolean mAdjustColor = false;
-	private JCheckBoxMenuItem mAdjustColorCheckBoxMenuItem;
+	private int mFbType = FB_TYPE_XBGR;
 
 	private ADB mADB;
 	private IDevice[] mDevices;
@@ -121,6 +131,7 @@ public class MainFrame extends JFrame {
 	public void setOrientation(boolean portrait) {
 		if (mPortrait != portrait) {
 			mPortrait = portrait;
+			savePrefs();
 			updateSize();
 		}
 	}
@@ -128,10 +139,18 @@ public class MainFrame extends JFrame {
 	public void setZoom(double zoom) {
 		if (mZoom != zoom) {
 			mZoom = zoom;
+			savePrefs();
 			updateSize();
 		}
 	}
 
+	public void setFrameBuffer(int fbType) {
+		if (mFbType != fbType) {
+			mFbType = fbType;
+			savePrefs();
+		}
+	}
+	
 	public void saveImage() {
 		FBImage inImage = mPanel.getFBImage();
 		if (inImage != null) {
@@ -218,6 +237,7 @@ public class MainFrame extends JFrame {
 
 		parseArgs(args);
 		
+		initializePrefs();
 		initializeFrame();
 		initializePanel();
 		initializeMenu();
@@ -234,9 +254,32 @@ public class MainFrame extends JFrame {
 		if (args != null) {
 			for (int i = 0; i < args.length; i++) {
 				String arg = args[i];
-				if (arg.equals("-a")) {
-					mAdjustColor = true;
+				if (arg.equals("-f1")) {
+					mFbType = FB_TYPE_RGBX;
+				} else if (arg.equals("-f2")) {
+					mFbType = FB_TYPE_XRGB;
 				}
+			}
+		}
+	}
+	
+	private void savePrefs() {
+		if (mPrefs != null) {
+			mPrefs.putInt("PrefVer", 1);
+			mPrefs.putBoolean("Portrait", mPortrait);
+			mPrefs.putDouble("Zoom", mZoom);
+			mPrefs.putInt("FbType", mFbType);
+		}
+	}
+	
+	private void initializePrefs() {
+		mPrefs = Preferences.userNodeForPackage(this.getClass());
+		if (mPrefs != null) {
+			int prefVer = mPrefs.getInt("PrefVer", 1);
+			if (prefVer == 1) {
+				mPortrait = mPrefs.getBoolean("Portrait", true);
+				mZoom = mPrefs.getDouble("Zoom", 1.0);
+				mFbType = mPrefs.getInt("FbType", FB_TYPE_XBGR);
 			}
 		}
 	}
@@ -261,7 +304,7 @@ public class MainFrame extends JFrame {
 		mPopupMenu.addSeparator();
 		initializeOrientationMenu();
 		initializeZoomMenu();
-		initializeAdjustColor();
+		initializeFrameBufferMenu();
 		mPopupMenu.addSeparator();
 		initializeSaveImageMenu();
 		mPopupMenu.addSeparator();
@@ -300,13 +343,15 @@ public class MainFrame extends JFrame {
 		// Portrait
 		JRadioButtonMenuItem radioButtonMenuItemPortrait = new JRadioButtonMenuItem(
 				"Portrait");
-		radioButtonMenuItemPortrait.setSelected(true);
 		radioButtonMenuItemPortrait.setMnemonic(KeyEvent.VK_P);
 		radioButtonMenuItemPortrait.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				setOrientation(true);
 			}
 		});
+		if (mPortrait) {
+			radioButtonMenuItemPortrait.setSelected(true);
+		}
 		buttonGroup.add(radioButtonMenuItemPortrait);
 		menuOrientation.add(radioButtonMenuItemPortrait);
 
@@ -319,6 +364,9 @@ public class MainFrame extends JFrame {
 				setOrientation(false);
 			}
 		});
+		if (!mPortrait) {
+			radioButtonMenuItemLandscape.setSelected(true);
+		}
 		buttonGroup.add(radioButtonMenuItemLandscape);
 		menuOrientation.add(radioButtonMenuItemLandscape);
 	}
@@ -330,80 +378,85 @@ public class MainFrame extends JFrame {
 
 		ButtonGroup buttonGroup = new ButtonGroup();
 
-		// Zoom 50%
-		JRadioButtonMenuItem radioButtonMenuItemZoom50 = new JRadioButtonMenuItem(
-				"50%");
-		radioButtonMenuItemZoom50.setMnemonic(KeyEvent.VK_5);
-		radioButtonMenuItemZoom50.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				setZoom(0.5);
-			}
-		});
-		buttonGroup.add(radioButtonMenuItemZoom50);
-		menuZoom.add(radioButtonMenuItemZoom50);
-
-		// Zoom 75%
-		JRadioButtonMenuItem radioButtonMenuItemZoom75 = new JRadioButtonMenuItem(
-				"75%");
-		radioButtonMenuItemZoom75.setMnemonic(KeyEvent.VK_7);
-		radioButtonMenuItemZoom75.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				setZoom(0.75);
-			}
-		});
-		buttonGroup.add(radioButtonMenuItemZoom75);
-		menuZoom.add(radioButtonMenuItemZoom75);
-
-		// Zoom 100%
-		JRadioButtonMenuItem radioButtonMenuItemZoom100 = new JRadioButtonMenuItem(
-				"100%");
-		radioButtonMenuItemZoom100.setSelected(true);
-		radioButtonMenuItemZoom100.setMnemonic(KeyEvent.VK_1);
-		radioButtonMenuItemZoom100.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				setZoom(1.0);
-			}
-		});
-		buttonGroup.add(radioButtonMenuItemZoom100);
-		menuZoom.add(radioButtonMenuItemZoom100);
-
-		// Zoom 150%
-		JRadioButtonMenuItem radioButtonMenuItemZoom150 = new JRadioButtonMenuItem(
-				"150%");
-		radioButtonMenuItemZoom150.setMnemonic(KeyEvent.VK_0);
-		radioButtonMenuItemZoom150.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				setZoom(1.5);
-			}
-		});
-		buttonGroup.add(radioButtonMenuItemZoom150);
-		menuZoom.add(radioButtonMenuItemZoom150);
-
-		// Zoom 200%
-		JRadioButtonMenuItem radioButtonMenuItemZoom200 = new JRadioButtonMenuItem(
-				"200%");
-		radioButtonMenuItemZoom200.setMnemonic(KeyEvent.VK_2);
-		radioButtonMenuItemZoom200.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				setZoom(2.0);
-			}
-		});
-		buttonGroup.add(radioButtonMenuItemZoom200);
-		menuZoom.add(radioButtonMenuItemZoom200);
+		addRadioButtonMenuItemZoom(menuZoom, buttonGroup, 0.1, "10%", -1, mZoom);
+		addRadioButtonMenuItemZoom(menuZoom, buttonGroup, 0.25, "25%", -1, mZoom);
+		addRadioButtonMenuItemZoom(menuZoom, buttonGroup, 0.5, "50%", KeyEvent.VK_5, mZoom);
+		addRadioButtonMenuItemZoom(menuZoom, buttonGroup, 0.75, "75%", KeyEvent.VK_7, mZoom);
+		addRadioButtonMenuItemZoom(menuZoom, buttonGroup, 1.0, "100%", KeyEvent.VK_1, mZoom);
+		addRadioButtonMenuItemZoom(menuZoom, buttonGroup, 1.5, "150%", KeyEvent.VK_0, mZoom);
+		addRadioButtonMenuItemZoom(menuZoom, buttonGroup, 2.0, "200%", KeyEvent.VK_2, mZoom);
 	}
 
-	private void initializeAdjustColor() {
-		mAdjustColorCheckBoxMenuItem = new JCheckBoxMenuItem("Adjust Color");
-		mAdjustColorCheckBoxMenuItem.setMnemonic(KeyEvent.VK_J);
-		mAdjustColorCheckBoxMenuItem.addActionListener(new ActionListener() {
+	private void addRadioButtonMenuItemZoom(
+			JMenu menuZoom, ButtonGroup buttonGroup,
+			final double zoom, String caption, int nemonic,
+			double currentZoom) {
+		JRadioButtonMenuItem radioButtonMenuItemZoom = new JRadioButtonMenuItem(caption);
+		if (nemonic != -1) {
+			radioButtonMenuItemZoom.setMnemonic(nemonic);
+		}
+		radioButtonMenuItemZoom.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				mAdjustColor = !mAdjustColor;
-				mAdjustColorCheckBoxMenuItem.setSelected(mAdjustColor);
+				setZoom(zoom);
 			}
 		});
-		mPopupMenu.add(mAdjustColorCheckBoxMenuItem);
+		if (currentZoom == zoom) {
+			radioButtonMenuItemZoom.setSelected(true);
+		}
+		buttonGroup.add(radioButtonMenuItemZoom);
+		menuZoom.add(radioButtonMenuItemZoom);
 	}
 	
+	private void initializeFrameBufferMenu() {
+		JMenu menuZoom = new JMenu("FrameBuffer");
+		menuZoom.setMnemonic(KeyEvent.VK_F);
+		mPopupMenu.add(menuZoom);
+
+		ButtonGroup buttonGroup = new ButtonGroup();
+
+		// XBGR
+		JRadioButtonMenuItem radioButtonMenuItemFbXBGR = new JRadioButtonMenuItem(
+				"XBGR");
+		radioButtonMenuItemFbXBGR.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				setFrameBuffer(FB_TYPE_XBGR);
+			}
+		});
+		if (mFbType == FB_TYPE_XBGR) {
+			radioButtonMenuItemFbXBGR.setSelected(true);
+		}
+		buttonGroup.add(radioButtonMenuItemFbXBGR);
+		menuZoom.add(radioButtonMenuItemFbXBGR);
+
+		// RGBX
+		JRadioButtonMenuItem radioButtonMenuItemFbRGBX = new JRadioButtonMenuItem(
+				"RGBX");
+		radioButtonMenuItemFbRGBX.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				setFrameBuffer(FB_TYPE_RGBX);
+			}
+		});
+		if (mFbType == FB_TYPE_RGBX) {
+			radioButtonMenuItemFbRGBX.setSelected(true);
+		}
+		buttonGroup.add(radioButtonMenuItemFbRGBX);
+		menuZoom.add(radioButtonMenuItemFbRGBX);
+
+		// XRGB
+		JRadioButtonMenuItem radioButtonMenuItemFbXRGB = new JRadioButtonMenuItem(
+				"XRGB");
+		radioButtonMenuItemFbXRGB.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				setFrameBuffer(FB_TYPE_XRGB);
+			}
+		});
+		if (mFbType == FB_TYPE_XRGB) {
+			radioButtonMenuItemFbXRGB.setSelected(true);
+		}
+		buttonGroup.add(radioButtonMenuItemFbXRGB);
+		menuZoom.add(radioButtonMenuItemFbXRGB);
+	}
+
 	private void initializeSaveImageMenu() {
 		JMenuItem menuItemSaveImage = new JMenuItem("Save Image...");
 		menuItemSaveImage.setMnemonic(KeyEvent.VK_S);
@@ -456,12 +509,6 @@ public class MainFrame extends JFrame {
 				setZoom(2.0);
 			}
 		};
-		AbstractAction actionAdjustColor = new AbstractAction() {
-			public void actionPerformed(ActionEvent e) {
-				mAdjustColor = !mAdjustColor;
-				mAdjustColorCheckBoxMenuItem.setSelected(mAdjustColor);
-			}
-		};
 		AbstractAction actionSaveImage = new AbstractAction() {
 			public void actionPerformed(ActionEvent e) {
 				saveImage();
@@ -492,8 +539,6 @@ public class MainFrame extends JFrame {
 				InputEvent.CTRL_DOWN_MASK), "150%");
 		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_2,
 				InputEvent.CTRL_DOWN_MASK), "200%");
-		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_J,
-				InputEvent.CTRL_DOWN_MASK), "Adjust Color");
 		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_S,
 				InputEvent.CTRL_DOWN_MASK), "Save Image");
 		inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_A,
@@ -511,7 +556,6 @@ public class MainFrame extends JFrame {
 		targetComponent.getActionMap().put("100%", actionZoom100);
 		targetComponent.getActionMap().put("150%", actionZoom150);
 		targetComponent.getActionMap().put("200%", actionZoom200);
-		targetComponent.getActionMap().put("Adjust Color", actionAdjustColor);
 		targetComponent.getActionMap().put("Save Image", actionSaveImage);
 		targetComponent.getActionMap().put("About ASM", actionAbout);
 	}
@@ -620,7 +664,7 @@ public class MainFrame extends JFrame {
 			return mFBImage;
 		}
 	}
-
+	
 	public class MonitorThread extends Thread {
 
 		@Override
@@ -745,13 +789,8 @@ public class MainFrame extends JFrame {
 				final int offset3;
 				
 				if (rawImage.bpp == 16) {
-					if (!mAdjustColor) {
-						offset0 = 0;
-						offset1 = 1;
-					} else {
-						offset0 = 1;
-						offset1 = 0;
-					}
+					offset0 = 1;
+					offset1 = 0;
 					if (mPortrait) {
 						for (int y = 0; y < rawImage.height; y++) {
 							for (int x = 0; x < rawImage.width; x++) {
@@ -782,17 +821,10 @@ public class MainFrame extends JFrame {
 						}
 					}
 				} else if (rawImage.bpp == 32) {
-					if (!mAdjustColor) {
-						offset0 = 0;
-						offset1 = 1;
-						offset2 = 2;
-						offset3 = 3;					
-					} else {
-						offset0 = 3;
-						offset1 = 2;
-						offset2 = 1;
-						offset3 = 0;
-					}
+					offset0 = FB_OFFSET_LIST[mFbType][0];
+					offset1 = FB_OFFSET_LIST[mFbType][1];
+					offset2 = FB_OFFSET_LIST[mFbType][2];
+					offset3 = FB_OFFSET_LIST[mFbType][3];					
 					if (mPortrait) {
 						for (int y = 0; y < rawImage.height; y++) {
 							for (int x = 0; x < rawImage.width; x++) {

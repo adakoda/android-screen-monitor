@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2011 adakoda
+ * Copyright (C) 2009-2013 adakoda
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,9 +47,9 @@ public class AboutDialog extends JDialog {
 		setResizable(false);
 
 		// Label
-		JLabel labelApp = new JLabel("Android Screen Monitor Version 2.30");
+		JLabel labelApp = new JLabel("Android Screen Monitor Version 2.40");
 		JLabel labelCopyright = new JLabel(
-				"Copyright (C) 2009-2011 adakoda Al rights reserved.");
+				"Copyright (C) 2009-2013 adakoda Al rights reserved.");
 		JTextField labelUrl = new JTextField(
 				"http://www.adakoda.com/adakoda/android/asm/");
 		labelUrl.setEditable(false);
