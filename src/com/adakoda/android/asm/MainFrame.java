@@ -81,8 +81,8 @@ public class MainFrame extends JFrame {
 
 	private MonitorThread mMonitorThread;
 
-	public MainFrame() {
-		initialize();
+	public MainFrame(String[] args) {
+		initialize(args);
 	}
 
 	public void startMonitor() {
@@ -208,10 +208,16 @@ public class MainFrame extends JFrame {
 		updateSize();
 	}
 
-	private void initialize() {
+	private void initialize(String[] args) {
 		mADB = new ADB();
-		mADB.initialize();
+		if (!mADB.initialize()) {
+			JOptionPane.showMessageDialog(this,
+				"Could not find adb, please install Android SDK and set path to adb.",
+				"Error", JOptionPane.ERROR_MESSAGE);
+		}
 
+		parseArgs(args);
+		
 		initializeFrame();
 		initializePanel();
 		initializeMenu();
@@ -224,6 +230,17 @@ public class MainFrame extends JFrame {
 		setImage(null);
 	}
 
+	private void parseArgs(String[] args) {
+		if (args != null) {
+			for (int i = 0; i < args.length; i++) {
+				String arg = args[i];
+				if (arg.equals("-a")) {
+					mAdjustColor = true;
+				}
+			}
+		}
+	}
+	
 	private void initializeFrame() {
 		setTitle("Android Screen Monitor");
 		setIconImage(Toolkit.getDefaultToolkit().getImage(
@@ -703,8 +720,8 @@ public class MainFrame extends JFrame {
 				}
 
 				fbImage = new FBImage(imageWidth, imageHeight,
-						BufferedImage.TYPE_INT_ARGB, rawImage.width,
-						rawImage.height);
+						BufferedImage.TYPE_INT_RGB, // BufferedImage.TYPE_INT_ARGB
+						rawImage.width, rawImage.height);
 
 				final byte[] buffer = rawImage.data;
 				final int redOffset = rawImage.red_offset;
