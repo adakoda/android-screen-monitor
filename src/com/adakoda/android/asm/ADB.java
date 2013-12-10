@@ -29,6 +29,10 @@ public class ADB {
 		String adbLocation = System
 				.getProperty("com.android.screenshot.bindir");
 
+		// for debugging (follwing line is a example)
+//		adbLocation = "C:\\ ... \\android-sdk-windows\\platform-tools"; // Windows
+//		adbLocation = "/ ... /adt-bundle-mac-x86_64/sdk/platform-tools"; // MacOS X
+		
 		if (success) {
 			if ((adbLocation != null) && (adbLocation.length() != 0)) {
 				adbLocation += File.separator + "adb";

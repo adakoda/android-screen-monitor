@@ -213,6 +213,10 @@ public class MainFrame extends JFrame {
 		int newWidth = (int) (width * mZoom) + insets.left + insets.right;
 		int newHeight = (int) (height * mZoom) + insets.top + insets.bottom;
 
+		// Known bug
+		// If new window size is over physical window size, cannot update window
+		// size...
+		// FIXME
 		if ((getWidth() != newWidth) || (getHeight() != newHeight)) {
 			setSize(newWidth, newHeight);
 		}
@@ -254,7 +258,9 @@ public class MainFrame extends JFrame {
 		if (args != null) {
 			for (int i = 0; i < args.length; i++) {
 				String arg = args[i];
-				if (arg.equals("-f1")) {
+				if (arg.equals("-f0")) {
+					mFbType = FB_TYPE_XBGR;
+				} else if (arg.equals("-f1")) {
 					mFbType = FB_TYPE_RGBX;
 				} else if (arg.equals("-f2")) {
 					mFbType = FB_TYPE_XRGB;
@@ -789,20 +795,21 @@ public class MainFrame extends JFrame {
 				final int offset3;
 				
 				if (rawImage.bpp == 16) {
-					offset0 = 1;
-					offset1 = 0;
+					offset0 = 0;
+					offset1 = 1;
 					if (mPortrait) {
+						int[] lineBuf = new int[rawImage.width];
 						for (int y = 0; y < rawImage.height; y++) {
-							for (int x = 0; x < rawImage.width; x++) {
+							for (int x = 0; x < rawImage.width; x++, index += 2) {
 								int value = buffer[index + offset0] & 0x00FF;
 								value |= (buffer[index + offset1] << 8) & 0xFF00;
 								int r = ((value >>> redOffset) & redMask) << redShift;
 								int g = ((value >>> greenOffset) & greenMask) << greenShift;
 								int b = ((value >>> blueOffset) & blueMask) << blueShift;
-								value = 255 << 24 | r << 16 | g << 8 | b;
-								index += 2;
-								fbImage.setRGB(x, y, value);
+								lineBuf[x] = 255 << 24 | r << 16 | g << 8 | b;
 							}
+							fbImage.setRGB(0, y, rawImage.width, 1, lineBuf, 0,
+									rawImage.width);
 						}
 					} else {
 						for (int y = 0; y < rawImage.height; y++) {
@@ -826,10 +833,10 @@ public class MainFrame extends JFrame {
 					offset2 = FB_OFFSET_LIST[mFbType][2];
 					offset3 = FB_OFFSET_LIST[mFbType][3];					
 					if (mPortrait) {
+						int[] lineBuf = new int[rawImage.width];
 						for (int y = 0; y < rawImage.height; y++) {
-							for (int x = 0; x < rawImage.width; x++) {
-								int value;
-								value = buffer[index + offset0] & 0x00FF;
+							for (int x = 0; x < rawImage.width; x++, index += 4) {
+								int value = buffer[index + offset0] & 0x00FF;
 								value |= (buffer[index + offset1] & 0x00FF) << 8;
 								value |= (buffer[index + offset2] & 0x00FF) << 16;
 								value |= (buffer[index + offset3] & 0x00FF) << 24;
@@ -842,10 +849,10 @@ public class MainFrame extends JFrame {
 								} else {
 									a = ((value >>> alphaOffset) & alphaMask) << alphaShift;
 								}
-								value = a << 24 | r << 16 | g << 8 | b;
-								index += 4;
-								fbImage.setRGB(x, y, value);
+								lineBuf[x] = a << 24 | r << 16 | g << 8 | b;
 							}
+							fbImage.setRGB(0, y, rawImage.width, 1, lineBuf, 0,
+									rawImage.width);
 						}
 					} else {
 						for (int y = 0; y < rawImage.height; y++) {
