@@ -528,14 +528,12 @@ public class MainFrame extends JFrame {
 				if (mPortrait) {
 					srcWidth = mRawImageWidth;
 					srcHeight = mRawImageHeight;
-					dstWidth = (int) (srcWidth * mZoom);
-					dstHeight = (int) (srcHeight * mZoom);
 				} else {
 					srcWidth = mRawImageHeight;
 					srcHeight = mRawImageWidth;
-					dstWidth = (int) (srcWidth * mZoom);
-					dstHeight = (int) (srcHeight * mZoom);
 				}
+				dstWidth = (int) (srcWidth * mZoom);
+				dstHeight = (int) (srcHeight * mZoom);
 				if (mZoom == 1.0) {
 					g.drawImage(mFBImage, 0, 0, dstWidth, dstHeight, 0, 0,
 							srcWidth, srcHeight, null);
@@ -561,6 +559,7 @@ public class MainFrame extends JFrame {
 	}
 
 	public class MonitorThread extends Thread {
+
 		@Override
 		public void run() {
 			Thread thread = Thread.currentThread();
@@ -581,23 +580,69 @@ public class MainFrame extends JFrame {
 
 		private FBImage getDeviceImage() throws IOException {
 			boolean success = true;
+			boolean debug = false; // リリース時はfalseとすること
 			FBImage fbImage = null;
+			RawImage tmpRawImage = null;
 			RawImage rawImage = null;
 
 			if (success) {
 				try {
-					rawImage = mDevice.getScreenshot();
+					tmpRawImage = mDevice.getScreenshot();
+
+					if (tmpRawImage == null) {
+						success = false;
+					} else {
+						if (debug == false) {
+							rawImage = tmpRawImage;
+						} else {
+							// デバッグ用に16bppで取得したRAWImageを32bppに書き換える
+							rawImage = new RawImage();
+							rawImage.version = 1;
+							rawImage.bpp = 32;
+							rawImage.size = tmpRawImage.width
+									* tmpRawImage.height * 4;
+							rawImage.width = tmpRawImage.width;
+							rawImage.height = tmpRawImage.height;
+							rawImage.red_offset = 0;
+							rawImage.red_length = 8;
+							rawImage.blue_offset = 16;
+							rawImage.blue_length = 8;
+							rawImage.green_offset = 8;
+							rawImage.green_length = 8;
+							rawImage.alpha_offset = 0;
+							rawImage.alpha_length = 0;
+							rawImage.data = new byte[rawImage.size];
+
+							int index = 0;
+							int dst = 0;
+							for (int y = 0; y < rawImage.height; y++) {
+								for (int x = 0; x < rawImage.width; x++) {
+									int value = tmpRawImage.data[index++] & 0x00FF;
+									value |= (tmpRawImage.data[index++] << 8) & 0xFF00;
+									int r = ((value >> 11) & 0x01F) << 3;
+									int g = ((value >> 5) & 0x03F) << 2;
+									int b = ((value >> 0) & 0x01F) << 3;
+									// little endian
+									rawImage.data[dst++] = (byte) r;
+									rawImage.data[dst++] = (byte) g;
+									rawImage.data[dst++] = (byte) b;
+									rawImage.data[dst++] = (byte) 0xFF;
+								}
+							}
+						}
+					}
 				} catch (IOException ioe) {
 				} finally {
-					if ((rawImage == null) || (rawImage.bpp != 16)) {
+					if ((rawImage == null)
+							|| ((rawImage.bpp != 16) && (rawImage.bpp != 32))) {
 						success = false;
 					}
 				}
 			}
 
 			if (success) {
-				int imageWidth;
-				int imageHeight;
+				final int imageWidth;
+				final int imageHeight;
 
 				if (mPortrait) {
 					imageWidth = rawImage.width;
@@ -611,30 +656,96 @@ public class MainFrame extends JFrame {
 						BufferedImage.TYPE_INT_ARGB, rawImage.width,
 						rawImage.height);
 
-				byte[] buffer = rawImage.data;
+				final byte[] buffer = rawImage.data;
+				final int redOffset = rawImage.red_offset;
+				final int greenOffset = rawImage.green_offset;
+				final int blueOffset = rawImage.blue_offset;
+				final int alphaOffset = rawImage.alpha_offset;
+				final int redMask = getMask(rawImage.red_length);
+				final int greenMask = getMask(rawImage.green_length);
+				final int blueMask = getMask(rawImage.blue_length);
+				final int alphaMask = getMask(rawImage.alpha_length);
+				final int redShift = (8 - rawImage.red_length);
+				final int greenShift = (8 - rawImage.green_length);
+				final int blueShift = (8 - rawImage.blue_length);
+				final int alphaShift = (8 - rawImage.alpha_length);
+
 				int index = 0;
-				if (mPortrait) {
-					for (int y = 0; y < rawImage.height; y++) {
-						for (int x = 0; x < rawImage.width; x++) {
-							int value = buffer[index++] & 0x00FF;
-							value |= (buffer[index++] << 8) & 0x0FF00;
-							int r = ((value >> 11) & 0x01F) << 3;
-							int g = ((value >> 5) & 0x03F) << 2;
-							int b = ((value >> 0) & 0x01F) << 3;
-							value = 0xFF << 24 | r << 16 | g << 8 | b;
-							fbImage.setRGB(x, y, value);
+
+				if (rawImage.bpp == 16) {
+					if (mPortrait) {
+						for (int y = 0; y < rawImage.height; y++) {
+							for (int x = 0; x < rawImage.width; x++) {
+								int value = buffer[index++] & 0x00FF;
+								value |= (buffer[index++] << 8) & 0xFF00;
+								int r = ((value >>> redOffset) & redMask) << redShift;
+								int g = ((value >>> greenOffset) & greenMask) << greenShift;
+								int b = ((value >>> blueOffset) & blueMask) << blueShift;
+								value = 255 << 24 | r << 16 | g << 8 | b;
+								fbImage.setRGB(x, y, value);
+							}
+						}
+					} else {
+						for (int y = 0; y < rawImage.height; y++) {
+							for (int x = 0; x < rawImage.width; x++) {
+								int value = buffer[index++] & 0x00FF;
+								value |= (buffer[index++] << 8) & 0xFF00;
+								int r = ((value >>> redOffset) & redMask) << redShift;
+								int g = ((value >>> greenOffset) & greenMask) << greenShift;
+								int b = ((value >>> blueOffset) & blueMask) << blueShift;
+								value = 255 << 24 | r << 16 | g << 8 | b;
+								fbImage
+										.setRGB(y, rawImage.width - x - 1,
+												value);
+							}
 						}
 					}
-				} else {
-					for (int y = 0; y < rawImage.height; y++) {
-						for (int x = 0; x < rawImage.width; x++) {
-							int value = buffer[index++] & 0x00FF;
-							value |= (buffer[index++] << 8) & 0x0FF00;
-							int r = ((value >> 11) & 0x01F) << 3;
-							int g = ((value >> 5) & 0x03F) << 2;
-							int b = ((value >> 0) & 0x01F) << 3;
-							value = 0xFF << 24 | r << 16 | g << 8 | b;
-							fbImage.setRGB(y, rawImage.width - x - 1, value);
+				} else if (rawImage.bpp == 32) {
+					if (mPortrait) {
+						for (int y = 0; y < rawImage.height; y++) {
+							for (int x = 0; x < rawImage.width; x++) {
+								int value;
+								value = buffer[index] & 0x00FF;
+								value |= (buffer[index + 1] & 0x00FF) << 8;
+								value |= (buffer[index + 2] & 0x00FF) << 16;
+								value |= (buffer[index + 3] & 0x00FF) << 24;
+								final int r = ((value >>> redOffset) & redMask) << redShift;
+								final int g = ((value >>> greenOffset) & greenMask) << greenShift;
+								final int b = ((value >>> blueOffset) & blueMask) << blueShift;
+								final int a;
+								if (rawImage.alpha_length == 0) {
+									a = 0xFF;
+								} else {
+									a = ((value >>> alphaOffset) & alphaMask) << alphaShift;
+								}
+								value = a << 24 | r << 16 | g << 8 | b;
+								index += 4;
+								fbImage.setRGB(x, y, value);
+							}
+						}
+					} else {
+						for (int y = 0; y < rawImage.height; y++) {
+							for (int x = 0; x < rawImage.width; x++) {
+								int value;
+								value = buffer[index] & 0x00FF;
+								value |= (buffer[index + 1] & 0x00FF) << 8;
+								value |= (buffer[index + 2] & 0x00FF) << 16;
+								value |= (buffer[index + 3] & 0x00FF) << 24;
+								final int r = ((value >>> redOffset) & redMask) << redShift;
+								final int g = ((value >>> greenOffset) & greenMask) << greenShift;
+								final int b = ((value >>> blueOffset) & blueMask) << blueShift;
+								final int a;
+								if (rawImage.alpha_length == 0) {
+									a = 0xFF;
+								} else {
+									a = ((value >>> alphaOffset) & alphaMask) << alphaShift;
+								}
+								value = a << 24 | r << 16 | g << 8 | b;
+								index += 4;
+								fbImage
+										.setRGB(y, rawImage.width - x - 1,
+												value);
+							}
 						}
 					}
 				}
@@ -642,5 +753,14 @@ public class MainFrame extends JFrame {
 
 			return fbImage;
 		}
+		
+		public int getMask(int length) {
+	        int res = 0;
+	        for (int i = 0 ; i < length ; i++) {
+	            res = (res << 1) + 1;
+	        }
+
+	        return res;
+	    }
 	}
 }
