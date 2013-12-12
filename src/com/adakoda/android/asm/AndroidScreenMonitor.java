@@ -29,6 +29,7 @@ public class AndroidScreenMonitor {
 		mMainFrame = new MainFrame(mArgs);
 		mMainFrame.setLocationRelativeTo(null);
 		mMainFrame.setVisible(true);
+		mMainFrame.setFocusable(true);
 		mMainFrame.selectDevice();
 	}
 	
