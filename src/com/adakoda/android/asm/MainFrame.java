@@ -246,7 +246,7 @@ public class MainFrame extends JFrame {
 
 	private void initialize(String[] args) {
 		mADB = new ADB();
-		if (!mADB.initialize()) {
+		if (!mADB.initialize(args)) {
 			JOptionPane.showMessageDialog(this,
 				"Could not find adb, please install Android SDK and set path to adb.",
 				"Error", JOptionPane.ERROR_MESSAGE);
