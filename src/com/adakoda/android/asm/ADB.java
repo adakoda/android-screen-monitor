@@ -32,19 +32,19 @@ public class ADB {
 		// You can specify android sdk directory using first argument
 		// A) If you lunch jar from eclipse, set arguments in Run/Debug configurations to android sdk directory .
 		//    /Applications/adt-bundle-mac-x86_64/sdk
-        // A) If you lunch jar from terminal, set arguments to android sdk directory or $ANDROID_HOME environment variable.
+		// A) If you lunch jar from terminal, set arguments to android sdk directory or $ANDROID_HOME environment variable.
 		//    java -jar ./jar/asm.jar $ANDROID_HOME
-        if (adbLocation == null) {
-            if ((args != null) && (args.length > 0)) {
-                adbLocation = args[0];
-            } else {
-                adbLocation = System.getenv("ANDROID_HOME");
-            }
-            // Here, adbLocation may be android sdk directory
-            if (adbLocation != null) {
-                adbLocation += File.separator + "platform-tools";
-            }
-        }
+		if (adbLocation == null) {
+			if ((args != null) && (args.length > 0)) {
+				adbLocation = args[0];
+			} else {
+				adbLocation = System.getenv("ANDROID_HOME");
+			}
+			// Here, adbLocation may be android sdk directory
+			if (adbLocation != null) {
+				adbLocation += File.separator + "platform-tools";
+			}
+		}
 
 		// for debugging (follwing line is a example)
 //		adbLocation = "C:\\ ... \\android-sdk-windows\\platform-tools"; // Windows
