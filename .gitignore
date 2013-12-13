@@ -7,3 +7,6 @@
 
 # OS X
 .DS_Store
+
+# Eclipse
+/bin
