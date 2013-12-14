@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project basedir=".." default="jar">
+    <path id="classpath">
+        <pathelement location="libs/chimpchat-22.2.0.jar"/>
+        <pathelement location="libs/ddmlib-22.2.0.jar"/>
+        <pathelement location="libs/guava-13.0.1.jar"/>
+    </path>
+
+    <target name="clean">
+        <delete file="asm.jar"/>
+        <delete dir="classes"/>
+    </target>
+
+    <target name="compile" depends="clean">
+        <mkdir dir="classes"/>
+        <javac srcdir="src" destdir="classes">
+            <classpath refid="classpath"/>
+        </javac>
+    </target>
+
+    <target name="jar" depends="compile">
+        <jar destfile="asm.jar" basedir="classes">
+            <zipgroupfileset dir="libs" includes="chimpchat-22.2.0.jar"/>
+            <zipgroupfileset dir="libs" includes="ddmlib-22.2.0.jar"/>
+            <zipgroupfileset dir="libs" includes="guava-13.0.1.jar"/>
+            <fileset dir="src" includes="com/adakoda/android/asm/*.png" />
+            <manifest>
+                <attribute name="Main-Class" value="com.adakoda.android.asm.AndroidScreenMonitor"/>
+            </manifest>
+        </jar>  
+    </target>
+</project>
