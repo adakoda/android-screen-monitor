@@ -9,7 +9,7 @@ ASM connects to adb on port 5037 and receives frame buffer continuously on the d
 You can rotate and scaling monitor window and export a image into PNG file as screen shot tool.
 
 ## Download
- * [Android Screen Monitor Ver.3.00](http://code.google.com/p/android-screen-monitor/downloads/detail?name=ASM_3_00.zip)
+ * [Android Screen Monitor](http://adakoda.github.io/android-screen-monitor/)
 
 ## System Requirements
  * Ver.3.00
