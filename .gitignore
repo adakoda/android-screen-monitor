@@ -1,6 +1,12 @@
 *.class
 
 # Package Files #
-*.jar
+# *.jar
 *.war
 *.ear
+
+# OS X
+.DS_Store
+
+# Eclipse
+/bin

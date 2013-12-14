@@ -19,13 +19,16 @@ import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Image;
 import java.awt.Insets;
+import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
 import java.awt.geom.AffineTransform;
@@ -34,6 +37,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.prefs.Preferences;
 
 import javax.imageio.ImageIO;
@@ -55,8 +59,11 @@ import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import javax.swing.filechooser.FileFilter;
 
+import com.android.chimpchat.adb.AdbChimpDevice;
+import com.android.ddmlib.AdbCommandRejectedException;
 import com.android.ddmlib.IDevice;
 import com.android.ddmlib.RawImage;
+import com.android.ddmlib.TimeoutException;
 
 @SuppressWarnings("serial")
 public class MainFrame extends JFrame {
@@ -88,8 +95,11 @@ public class MainFrame extends JFrame {
 	private ADB mADB;
 	private IDevice[] mDevices;
 	private IDevice mDevice;
+	private AdbChimpDevice mChimpDevice;
 
 	private MonitorThread mMonitorThread;
+
+	private String mBuildDevice = "";
 
 	public MainFrame(String[] args) {
 		initialize(args);
@@ -124,6 +134,9 @@ public class MainFrame extends JFrame {
 				}
 			}
 		}
+
+		mChimpDevice = new AdbChimpDevice(mDevice);
+		mBuildDevice = mChimpDevice.getProperty("build.device");
 
 		startMonitor();
 	}
@@ -233,7 +246,7 @@ public class MainFrame extends JFrame {
 
 	private void initialize(String[] args) {
 		mADB = new ADB();
-		if (!mADB.initialize()) {
+		if (!mADB.initialize(args)) {
 			JOptionPane.showMessageDialog(this,
 				"Could not find adb, please install Android SDK and set path to adb.",
 				"Error", JOptionPane.ERROR_MESSAGE);
@@ -249,6 +262,8 @@ public class MainFrame extends JFrame {
 
 		addMouseListener(mMouseListener);
 		addWindowListener(mWindowListener);
+		addMouseMotionListener(mMouseMotionListener);
+		addKeyListener(mKeyListener);
 
 		pack();
 		setImage(null);
@@ -577,11 +592,46 @@ public class MainFrame extends JFrame {
 		mPopupMenu.add(menuItemAbout);
 	}
 
+	private Point getRealPoint(Point p) {
+		int x = p.x;
+		int y = p.y;
+		Insets insets = getInsets();
+		int realX = (int) ((x - insets.left) / mZoom);
+		int realY = (int) ((y - insets.top) / mZoom);
+		return new Point(realX, realY);
+	}
+
+	private boolean isGlass() {
+		return mBuildDevice.startsWith("glass-");
+	}
+
 	private MouseListener mMouseListener = new MouseListener() {
 		public void mouseReleased(MouseEvent e) {
+			try {
+				if (isGlass()) {
+					// TODO
+				} else {
+					Point p = new Point(e.getX(), e.getY());
+					Point real = getRealPoint(p);
+					mChimpDevice.getManager().touchUp(real.x, real.y);
+				}
+			} catch (IOException ex) {
+				ex.printStackTrace();
+			}
 		}
 
 		public void mousePressed(MouseEvent e) {
+			try {
+				if (isGlass()) {
+					mChimpDevice.getManager().press("KEYCODE_DPAD_CENTER");
+				} else {
+					Point p = new Point(e.getX(), e.getY());
+					Point real = getRealPoint(p);
+					mChimpDevice.getManager().touchDown(real.x, real.y);
+				}
+			} catch (IOException ex) {
+				ex.printStackTrace();
+			}
 		}
 
 		public void mouseExited(MouseEvent e) {
@@ -611,6 +661,9 @@ public class MainFrame extends JFrame {
 		}
 
 		public void windowClosing(WindowEvent arg0) {
+			if (mChimpDevice != null) {
+				mChimpDevice.dispose();
+			}
 			if (mADB != null) {
 				mADB.terminate();
 			}
@@ -620,6 +673,77 @@ public class MainFrame extends JFrame {
 		}
 
 		public void windowActivated(WindowEvent arg0) {
+		}
+	};
+
+	private MouseMotionListener mMouseMotionListener = new MouseMotionListener() {
+
+		@Override
+		public void mouseMoved(MouseEvent e) {
+		}
+
+		@Override
+		public void mouseDragged(MouseEvent e) {
+			try {
+				Point p = new Point(e.getX(), e.getY());
+				Point real = getRealPoint(p);
+				mChimpDevice.getManager().touchMove(real.x, real.y);
+			} catch (IOException ex) {
+				ex.printStackTrace();
+			}
+		}
+	};
+
+	private KeyListener mKeyListener = new KeyListener() {
+
+		@Override
+		public void keyTyped(KeyEvent keyEvent) {
+		}
+
+		@Override
+		public void keyReleased(KeyEvent keyEvent) {
+		}
+
+		@Override
+		public void keyPressed(KeyEvent keyEvent) {
+			int code = keyEvent.getKeyCode();
+			char c = keyEvent.getKeyChar();
+			System.out.println(c + ":" + code + ":" + (int) c);
+			try {
+				switch (code) {
+				case KeyEvent.VK_BACK_SPACE:
+				case KeyEvent.VK_DELETE:
+					mChimpDevice.getManager().press("KEYCODE_DEL");
+					break;
+				case KeyEvent.VK_SPACE:
+					if (isGlass()) {
+						mChimpDevice.getManager().press("KEYCODE_DPAD_CENTER");
+					} else {
+						mChimpDevice.getManager().press("KEYCODE_SPACE");
+					}
+					break;
+				case KeyEvent.VK_ESCAPE:
+					mChimpDevice.getManager().press("KEYCODE_HOME");
+					break;
+				case KeyEvent.VK_LEFT:
+					mChimpDevice.getManager().press("KEYCODE_DPAD_LEFT");
+					break;
+				case KeyEvent.VK_RIGHT:
+					mChimpDevice.getManager().press("KEYCODE_DPAD_RIGHT");
+					break;
+				case KeyEvent.VK_UP:
+					mChimpDevice.getManager().press("KEYCODE_DPAD_UP");
+					break;
+				case KeyEvent.VK_DOWN:
+					mChimpDevice.getManager().press("KEYCODE_DPAD_DOWN");
+					break;
+				default:
+					mChimpDevice.getManager().type(c);
+					break;
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 	};
 
@@ -749,6 +873,10 @@ public class MainFrame extends JFrame {
 						}
 					}
 				} catch (IOException ioe) {
+				} catch (TimeoutException e) {
+					e.printStackTrace();
+				} catch (AdbCommandRejectedException e) {
+					e.printStackTrace();
 				} finally {
 					if ((rawImage == null)
 							|| ((rawImage.bpp != 16) && (rawImage.bpp != 32))) {
