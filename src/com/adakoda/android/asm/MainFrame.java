@@ -69,9 +69,9 @@ import com.android.ddmlib.TimeoutException;
 public class MainFrame extends JFrame {
 	private static final int DEFAULT_WIDTH = 320;
 	private static final int DEFAULT_HEIGHT = 480;
-	
+
 	private static final String EXT_PNG = "png";
-	
+
 	private static final int FB_TYPE_XBGR = 0;
 	private static final int FB_TYPE_RGBX = 1;
 	private static final int FB_TYPE_XRGB = 2;
@@ -81,7 +81,7 @@ public class MainFrame extends JFrame {
 			{3, 2, 1, 0}, // RGBX : Xperia Arc
 			{2, 1, 0, 3}  // XRGB : FireFox OS(B2G)
 	};
-	
+
 	private MainPanel mPanel;
 	private JPopupMenu mPopupMenu;
 
@@ -112,6 +112,26 @@ public class MainFrame extends JFrame {
 
 	public void stopMonitor() {
 		mMonitorThread = null;
+	}
+
+	public void setSelectedDevice(String device) {
+		stopMonitor();
+		mDevices = mADB.getDevices();
+		for(int i = 0; i < mDevices.length; ++i ) {
+			if(mDevices[i].toString().equals(device)) {
+				mDevice = mDevices[i];
+				setImage(null);
+				mChimpDevice = new AdbChimpDevice(mDevice);
+				mBuildDevice = mChimpDevice.getProperty("build.device");
+				startMonitor();
+				return;
+			}
+		}
+
+		if(mDevice == null) {
+			selectDevice();
+		}
+
 	}
 
 	public void selectDevice() {
@@ -163,7 +183,7 @@ public class MainFrame extends JFrame {
 			savePrefs();
 		}
 	}
-	
+
 	public void saveImage() {
 		FBImage inImage = mPanel.getFBImage();
 		if (inImage != null) {
@@ -253,7 +273,7 @@ public class MainFrame extends JFrame {
 		}
 
 		parseArgs(args);
-		
+
 		initializePrefs();
 		initializeFrame();
 		initializePanel();
@@ -283,7 +303,7 @@ public class MainFrame extends JFrame {
 			}
 		}
 	}
-	
+
 	private void savePrefs() {
 		if (mPrefs != null) {
 			mPrefs.putInt("PrefVer", 1);
@@ -292,7 +312,7 @@ public class MainFrame extends JFrame {
 			mPrefs.putInt("FbType", mFbType);
 		}
 	}
-	
+
 	private void initializePrefs() {
 		mPrefs = Preferences.userNodeForPackage(this.getClass());
 		if (mPrefs != null) {
@@ -304,7 +324,7 @@ public class MainFrame extends JFrame {
 			}
 		}
 	}
-	
+
 	private void initializeFrame() {
 		setTitle("Android Screen Monitor");
 		setIconImage(Toolkit.getDefaultToolkit().getImage(
@@ -427,7 +447,7 @@ public class MainFrame extends JFrame {
 		buttonGroup.add(radioButtonMenuItemZoom);
 		menuZoom.add(radioButtonMenuItemZoom);
 	}
-	
+
 	private void initializeFrameBufferMenu() {
 		JMenu menuZoom = new JMenu("FrameBuffer");
 		menuZoom.setMnemonic(KeyEvent.VK_F);
@@ -794,7 +814,7 @@ public class MainFrame extends JFrame {
 			return mFBImage;
 		}
 	}
-	
+
 	public class MonitorThread extends Thread {
 
 		@Override
@@ -921,7 +941,7 @@ public class MainFrame extends JFrame {
 				final int offset1;
 				final int offset2;
 				final int offset3;
-				
+
 				if (rawImage.bpp == 16) {
 					offset0 = 0;
 					offset1 = 1;
@@ -959,7 +979,7 @@ public class MainFrame extends JFrame {
 					offset0 = FB_OFFSET_LIST[mFbType][0];
 					offset1 = FB_OFFSET_LIST[mFbType][1];
 					offset2 = FB_OFFSET_LIST[mFbType][2];
-					offset3 = FB_OFFSET_LIST[mFbType][3];					
+					offset3 = FB_OFFSET_LIST[mFbType][3];
 					if (mPortrait) {
 						int[] lineBuf = new int[rawImage.width];
 						for (int y = 0; y < rawImage.height; y++) {
@@ -1012,7 +1032,7 @@ public class MainFrame extends JFrame {
 
 			return fbImage;
 		}
-		
+
 		public int getMask(int length) {
 	        int res = 0;
 	        for (int i = 0 ; i < length ; i++) {
