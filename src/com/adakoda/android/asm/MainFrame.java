@@ -16,6 +16,7 @@
 package com.adakoda.android.asm;
 
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Image;
 import java.awt.Insets;
@@ -82,6 +83,8 @@ public class MainFrame extends JFrame {
 			{2, 1, 0, 3}  // XRGB : FireFox OS(B2G)
 	};
 	
+	private static final String SPECIFY_ZOOM_CAPTION = "Zoom...";
+	
 	private MainPanel mPanel;
 	private JPopupMenu mPopupMenu;
 
@@ -100,6 +103,8 @@ public class MainFrame extends JFrame {
 	private MonitorThread mMonitorThread;
 
 	private String mBuildDevice = "";
+	
+	private JRadioButtonMenuItem mSepcifyZoom;
 
 	public MainFrame(String[] args) {
 		initialize(args);
@@ -406,6 +411,7 @@ public class MainFrame extends JFrame {
 		addRadioButtonMenuItemZoom(menuZoom, buttonGroup, 1.0, "100%", KeyEvent.VK_1, mZoom);
 		addRadioButtonMenuItemZoom(menuZoom, buttonGroup, 1.5, "150%", KeyEvent.VK_0, mZoom);
 		addRadioButtonMenuItemZoom(menuZoom, buttonGroup, 2.0, "200%", KeyEvent.VK_2, mZoom);
+		addRadioButtonMenuItemSpecifiedZoom(menuZoom, buttonGroup, -1, mZoom);
 	}
 
 	private void addRadioButtonMenuItemZoom(
@@ -419,6 +425,7 @@ public class MainFrame extends JFrame {
 		radioButtonMenuItemZoom.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				setZoom(zoom);
+				mSepcifyZoom.setText(SPECIFY_ZOOM_CAPTION);
 			}
 		});
 		if (currentZoom == zoom) {
@@ -426,6 +433,67 @@ public class MainFrame extends JFrame {
 		}
 		buttonGroup.add(radioButtonMenuItemZoom);
 		menuZoom.add(radioButtonMenuItemZoom);
+	}
+
+	private void addRadioButtonMenuItemSpecifiedZoom(
+			JMenu menuZoom, ButtonGroup buttonGroup,
+			int nemonic, double currentZoom) {
+		mSepcifyZoom = new JRadioButtonMenuItem(SPECIFY_ZOOM_CAPTION);
+		final JRadioButtonMenuItem radioButtonMenuItemZoom = mSepcifyZoom;
+		if (nemonic != -1) {
+			radioButtonMenuItemZoom.setMnemonic(nemonic);
+		}
+		boolean selectedOther = false;
+		JRadioButtonMenuItem selectedItem = null;
+		if (null != menuZoom.getMenuComponents()) {
+			for (Component item : menuZoom.getMenuComponents()) {
+				if (item instanceof JRadioButtonMenuItem) {
+					if (((JRadioButtonMenuItem)item).isSelected()) {
+						selectedOther = true;
+						selectedItem = (JRadioButtonMenuItem)item;
+						break;
+					}
+				}
+			}
+		}
+		if (!selectedOther) {
+			radioButtonMenuItemZoom.setSelected(true);
+			int intCurrentZoom = (int) Math.round(currentZoom * 100.0);
+			radioButtonMenuItemZoom.setText(SPECIFY_ZOOM_CAPTION + "(" + intCurrentZoom + "%)");
+			selectedItem = radioButtonMenuItemZoom;
+		}
+		final JRadioButtonMenuItem finalSelectedItem = selectedItem;
+		radioButtonMenuItemZoom.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				specifyZoom(radioButtonMenuItemZoom, finalSelectedItem);
+			}
+		});
+		buttonGroup.add(radioButtonMenuItemZoom);
+		menuZoom.add(radioButtonMenuItemZoom);
+	}
+	
+	private void specifyZoom(JRadioButtonMenuItem specifiedItem, JRadioButtonMenuItem selectedItem) {
+		stopMonitor();
+
+		SpecifyZoomDialog dialog = new SpecifyZoomDialog(this, true, mZoom);
+		dialog.setLocationRelativeTo(this);
+		dialog.setVisible(true);
+		if (dialog.isOK()) {
+			double specifiedZoom = dialog.getSpecifiedZoom();
+			if ((specifiedZoom > 0.0) && (mZoom != specifiedZoom)) {
+				mZoom = specifiedZoom;
+				savePrefs();
+				updateSize();
+				int intSpecifiedZoom = (int) Math.round(specifiedZoom * 100.0);
+				specifiedItem.setText(SPECIFY_ZOOM_CAPTION + "(" + intSpecifiedZoom + "%)");
+			} else {
+				selectedItem.setSelected(true);
+			}
+		} else {
+			selectedItem.setSelected(true);
+		}
+
+		startMonitor();
 	}
 	
 	private void initializeFrameBufferMenu() {
