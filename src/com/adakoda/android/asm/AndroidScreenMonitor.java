@@ -18,21 +18,25 @@ package com.adakoda.android.asm;
 import javax.swing.SwingUtilities;
 
 public class AndroidScreenMonitor {
-	
+
 	private MainFrame mMainFrame;
 	private static String[] mArgs;
 
 	public AndroidScreenMonitor() {
 	}
-	
+
 	public void initialize() {
 		mMainFrame = new MainFrame(mArgs);
 		mMainFrame.setLocationRelativeTo(null);
 		mMainFrame.setVisible(true);
 		mMainFrame.setFocusable(true);
-		mMainFrame.selectDevice();
+		if(mArgs != null && mArgs.length > 1) {
+			mMainFrame.setSelectedDevice(mArgs[1]);
+		} else {
+			mMainFrame.selectDevice();
+		}
 	}
-	
+
 	public static void main(String[] args) {
 		mArgs = args;
         SwingUtilities.invokeLater(new Runnable() {
