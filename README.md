@@ -1,5 +1,7 @@
 # Android Screen Monitor
 
+This project is deprecated. Visit another project such as https://www.vysor.io/.
+
 ## Overview
 The Android Screen Monitor (ASM) is a tool to monitor screen on the device or emulator.
 
