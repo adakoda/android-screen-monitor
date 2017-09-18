@@ -607,6 +607,9 @@ public class MainFrame extends JFrame {
 
 	private MouseListener mMouseListener = new MouseListener() {
 		public void mouseReleased(MouseEvent e) {
+                        if (e.getButton() != MouseEvent.BUTTON1) {
+                                return;
+                        }
 			try {
 				if (isGlass()) {
 					// TODO
@@ -621,6 +624,9 @@ public class MainFrame extends JFrame {
 		}
 
 		public void mousePressed(MouseEvent e) {
+                        if (e.getButton() != MouseEvent.BUTTON1) {
+                                return;
+                        }			
 			try {
 				if (isGlass()) {
 					mChimpDevice.getManager().press("KEYCODE_DPAD_CENTER");
